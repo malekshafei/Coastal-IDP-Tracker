@@ -718,7 +718,7 @@ def main():
     
     if page == "Overview":
        
-        st.title("Racing IDP Tracker")
+        st.title("Coastal Carolina IDP Tracker")
         
         st.markdown("Track and monitor player training sessions")
 
