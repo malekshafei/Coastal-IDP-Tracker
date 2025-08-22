@@ -69,6 +69,7 @@ df2['Kit #'] = df2['Kit #'].astype(str)
 
 
 
+player_data = pd.read_parquet("SunBeltPlayerData.parquet")
 
 def load_data():
     """Load data from Excel file, create sample data if file doesn't exist"""
@@ -235,7 +236,7 @@ def display_player_page(player_name, df):
     print(raw_player_name)
     print("")
     player_row = df2[df2['Player'] == raw_player_name].iloc[0]
-    
+    kit_number = str(player_row['Kit #'])
     # player_row = df2.loc[df2['Player'] == player_name]
 
     st.title(f"#{player_row['Kit #']} {player_name}")
@@ -287,11 +288,6 @@ def display_player_page(player_name, df):
     game_overview = pd.read_excel("Coastal Mins.xlsx")
     game_overview['Kit #'] = game_overview['Kit #'].astype(str)
 
-    kit_number = player_row['Kit #']
-    print(kit_number)
-
-    
-    
     
     poss_matches = np.max(game_overview['GP'])
     poss_mins =  poss_matches * 90
@@ -315,13 +311,11 @@ def display_player_page(player_name, df):
     with col1: st.metric("Goals", f"{player_goals}")
     with col2: st.metric("Assists", f"{player_assists}")
 
-    if player_row['Played Last Year?'] == 'Yes':
+    if player_row['Played Last Year'] == 'Yes':
         sb_player_id = player_id_matching[raw_player_name]
         player_pos_group = player_row['Position Group']
         #season_data = pd.read_parquet(f"SunBeltPlayerData.xlsx-{player_pos_group}.parquet")
-        season_data = pd.read_parquet("SunBeltPlayerData.parquet")
-
-        
+        season_data = player_data.copy(deep=True)
         #season_data.drop(['Matches Played','pctDistance','pctRunning Distance','pctHSR Distance','pctCount HSR', 'pctSprinting Distance', 'pctSprint Count', 'pctHI Distance', 'pctHI Count', 'pctMedium Accels','pctHigh Accels','pctMedium Decels', 'pctHigh Decels', 'pctWalking to HSR Count', 'pctWalking to Sprint Count', 'pctMatches Played', 'pctTop Speed', 'pctTime to Sprint', 'pctTime to HSR', 'pctWalking Distance', 'pct% of Distance Walking', 'pct% of Distance HI', 'pct% of Distance Sprinting', 'pct% of HI Distance Sprinting','Speed', 'Intensity', 'Explosiveness','Agility'],axis=1)
 
         pos_map = {
@@ -334,13 +328,12 @@ def display_player_page(player_name, df):
             9: 'ST'
         }
 
-        season_data['Position Group'] = season_data['Position Group'].apply(lambda x: pos_map.get(x, x))
         season_data['Position Group 1'] = season_data['grouped_position_1'].apply(lambda x: pos_map.get(x, x))
         season_data['Position Group 2'] = season_data['grouped_position_2'].apply(lambda x: pos_map.get(x, x))
         season_data['Position Group 3'] = season_data['grouped_position_3'].apply(lambda x: pos_map.get(x, x))
 
 
-        player_data = season_data[season_data['Player'] == sb_player_id]
+        player_data = season_data[season_data['player_id'] == sb_player_id]
         if len(player_data) > 0:
 
             #position_labels = [f"{position} ({position_minutes[position]} mins)" for position in sorted(player_data['Position Group'].unique())]
@@ -348,8 +341,8 @@ def display_player_page(player_name, df):
             #         f"{position} " 
             #         for position in sorted(player_data['Position Group'].unique())
             # ]
-            print(player_data.head())
-            position_labels = [player_data.iloc[0]['Position Group 1'], player_data.iloc[0]['Position Group 2'], player_data.iloc[0]['Position Group 3']]
+
+            position_labels = [player_data['Position Group 1'], player_data['Position Group 2'], player_data['Position Group 3']]
             position_labels = [elem for elem in position_labels if elem != 0]
 
             col1, col2, col3 = st.columns(3)
@@ -358,12 +351,9 @@ def display_player_page(player_name, df):
                                     position_labels, #sorted(player_data['Position Group'].unique()), 
                                     default = position_labels[0])
                 
-                
-                if position == []: st.error('Please select at least one position')
-                comp_data = season_data[season_data['Position Group']==position].sort_values(by='Minutes played',ascending=False)
-                print(len(season_data))
-                print(len(player_data))
-                print(len(comp_data))
+                positions = [label.split(' ')[0] for label in positions]
+                if positions == []: st.error('Please select at least one position')
+                comp_data = season_data[season_data['Position Group'].isin(positions)].sort_values(by='Minutes',ascending=False)
                 #st.write(positions)
             with col2:
                 compare = st.radio('Compare with another player?', ["No", "Yes"])
@@ -373,7 +363,7 @@ def display_player_page(player_name, df):
                     comp_player_name = st.selectbox('Player', comp_data[comp_data['Player'] != raw_player_name]['Player'].unique())
                 else: comp_player_name = '...'
             
-            #median_mins = np.median(comp_data['Minutes played'])
+            median_mins = np.median(comp_data['Minutes'])
 
             #comp_data = comp_data[(comp_data['player_id'] == sb_player_id) | (comp_data['Player'] == comp_player_name) | (comp_data['Minutes'] > median_mins)]
             # highlight = comp_data[(comp_data['player_id'] == sb_player_id) | (comp_data['Player'] == comp_player_name)]
@@ -381,7 +371,7 @@ def display_player_page(player_name, df):
             
             important_metrics = []
 
-            print(f"'{position}'")
+            
 
             #highlight = comp_data[(comp_data['player_id'] == sb_player_id) | (comp_data['Player'] == comp_player_name)]
             #st.write(comp_data[['Player', 'pos_group', 'Minutes', 'Top Speed','pctTop Speed', 'Speed']])
@@ -418,8 +408,8 @@ def display_player_page(player_name, df):
                 """Create radar chart for player comparison"""
                 
                 # Get player data
-                player_data = comp_data[comp_data['Player'] == sb_player_id].iloc[0]
-                player_mins = player_data.get('Minutes played', 0)
+                player_data = comp_data[comp_data['player_id'] == sb_player_id].iloc[0]
+                player_mins = player_data.get('Minutes', 0)
                 
                 # Get player ratings (assuming they're 0-100 scale)
                 player_ratings = [player_data[rating] for rating in important_ratings]
@@ -457,7 +447,7 @@ def display_player_page(player_name, df):
                 # Add comparison player if needed
                 if compare == 'Yes' and comp_player_name:
                     comp_player_data = comp_data[comp_data['Player'] == comp_player_name].iloc[0]
-                    comp_player_mins = comp_player_data.get('Minutes played', 0)
+                    comp_player_mins = comp_player_data.get('Minutes', 0)
                     comp_player_ratings = [comp_player_data[rating] for rating in important_ratings]
                     
                     fig.add_trace(go.Scatterpolar(
